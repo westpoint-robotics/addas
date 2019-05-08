@@ -12,15 +12,13 @@ from datetime import datetime
 GPIO.setwarnings(False)
 
 # Define Mission Parameters
-#target_lat =  32.790273			# Target Latitude
-#target_lng = -111.432771		# Target Longitude
-target_lat =  32.880346			# Target Latitude
-target_lng = -111.697348		# Target Longitude
+target_lat =  32.790491			# Target Latitude
+target_lng = -111.434988		# Target Longitude
 target_alt = 20                 # Target Altitude (not used)
 arm_alt = 800
 
 waypoint_thresh = 30 			# distance threshold for first waypoint
-dist_thresh = 50			    # Distance when drone is allowed to arm 
+dist_thresh = 600			    # Distance when drone is allowed to arm 
 
 state_machine = 1 # Phase of operation 
 prev_alt = 0 # Altitude at previous time through loop 
@@ -102,7 +100,7 @@ while True:
 
 	# Determine what state the machine is in (Phase of operation)
 	if state_machine == 1: # In transit to op area (do not fly)
-		vehicle.armed = False
+		#vehicle.armed = False
 		print "distance: ", distance, ", current_alt: ", current_alt
 		if (distance < dist_thresh and current_alt < arm_alt):
 			state_machine = 2
