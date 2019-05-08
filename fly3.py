@@ -12,16 +12,16 @@ from datetime import datetime
 GPIO.setwarnings(False)
 
 # Define Mission Parameters
-target_lat =  32.790273			# Target Latitude
-target_lng = -111.432771		# Target Longitude
+#target_lat =  32.790273			# Target Latitude
+#target_lng = -111.432771		# Target Longitude
+target_lat =  32.880346			# Target Latitude
+target_lng = -111.697348		# Target Longitude
 target_alt = 20                 # Target Altitude (not used)
 arm_alt = 800
 
 waypoint_thresh = 30 			# distance threshold for first waypoint
-dist_thresh = 50000			    # Distance when drone is allowed to arm 
-ult_dist_thresh = 1            # Threshold for ultrasonic sensor 0.5 meters
+dist_thresh = 50			    # Distance when drone is allowed to arm 
 
-ult_dist = 0
 state_machine = 1 # Phase of operation 
 prev_alt = 0 # Altitude at previous time through loop 
 throw_vert_rate = 0.3 # Rate in m/s we will assume throw engaged 
@@ -32,17 +32,6 @@ stop_range = 0
 # Setup ---------------------------------------------------------------------
 connection_string = ('/dev/serial/by-id/usb-3D_Robotics_PX4_FMU_v2.x_0-if00') # Location of the connection to the drone
 vehicle = connect(connection_string, wait_ready = True) # Opens Connection Port, Doesn't move on until connected
-
-# GPIO Pin Setup
-pin_trigger = 5
-pin_echo = 7
-latch_pin = 11
-GPIO.setmode(GPIO.BOARD)
-GPIO.setup(pin_trigger, GPIO.OUT)
-GPIO.setup(pin_echo, GPIO.IN)
-GPIO.output(pin_trigger, GPIO.LOW)
-GPIO.setup(latch_pin, GPIO.OUT)
-GPIO.output(latch_pin, GPIO.LOW)
 
 # Setup Initial Vehicle Mode
 vehicle.armed = False 
@@ -70,38 +59,6 @@ def writeArchive(log):
 		for i in log:
 			outfwriter.writerow(i)
 #-----------------FUNCTIONS----------------------------------------------------
-def read_distance():
-	break_flag = False
-	start_time = timeit.default_timer()
-	dist = []
-	start_range = 0
-	stop_range = 0
-	while timeit.default_timer() - start_time < .1:
-		GPIO.output(pin_trigger, GPIO.HIGH)
-		time.sleep(.00001)
-		GPIO.output(pin_trigger, GPIO.LOW)
-		break_time = timeit.default_timer()
-		while GPIO.input(pin_echo) == 0:
-			if (timeit.default_timer() - break_time) >.12 or break_flag == True:
-				start_range = 0
-				stop_range = 0
-				break_flag = True
-				break
-			start_range = time.time()
-
-		while GPIO.input(pin_echo) == 1:
-			if (timeit.default_timer() - break_time) > .12 or break_flag == True:
-				start_range = 0
-				stop_range = 0
-				break
-			stop_range = time.time()
-		duration =abs(stop_range - start_range)
-		dist1 = duration * 17150/100
-		dist.append(dist1)
-
-	avg_dist = np.mean(dist)
-	return avg_dist
-
 def dist_2_wp(lat1, lon1, lat2, lon2):
 	lat1 = radians(lat1)
 	lon1 = radians(lon1)
@@ -130,8 +87,8 @@ while True:
 	current_lat = vehicle.location.global_frame.lat
 	current_lng = vehicle.location.global_frame.lon
 	current_alt = vehicle.location.global_frame.alt
-	ult_dist = read_distance()
-	print "Modenow: ", vehicle.mode.name, ", Armed: ", vehicle.armed, ", StateMachine: ", state_machine, "GlobAlt: ", current_alt, ", UltDist: ", ult_dist
+
+	print "Modenow: ", vehicle.mode.name, ", Armed: ", vehicle.armed, ", StateMachine: ", state_machine, "GlobAlt: ", current_alt
 	alt_diff = abs(current_alt - prev_alt) #Compute alt change since last loop
 	prev_alt = current_alt # Update previous alt for next time in loop
 
@@ -155,16 +112,11 @@ while True:
 		if (distance < dist_thresh and current_alt < arm_alt):
 			vehicle.mode = VehicleMode("THROW")
 			vehicle.armed = True
-			#ult_dist = read_distance()
-                        print "Ultrasound Distance", ult_dist, ", Dist: ", distance
-			print "Entered Area: Armed"
-			# Detect if drop has occured 
-			#if (abs(alt_diff) > throw_vert_rate and ult_dist > ult_dist_thresh) or vehicle.mode.name == "AUTO" :
+			print "Entered Area: Armed, Dist: ", distance
 			if vehicle.mode.name == "AUTO":
 				state_machine = 3
 				print "switching to state 3"
-				#time.sleep(3)
-				#vehicle.mode = VehicleMode("AUTO")
+
 		else:
 			state_machine = 1
 
@@ -172,25 +124,19 @@ while True:
 		print "Entered State 3: Flying to First Waypoint"
 		dist_2_target = dist_2_wp(current_lat, current_lng, target_lat, target_lng)
 		print "Distance to target (m): ", dist_2_target
-		#ult_dist = read_distance()
 		if dist_2_target < waypoint_thresh:
 			print "Arrived at first waypoint"
 			print "Switching to state 4"
 			state_machine = 4
-			land_alt = current_alt - 10
+			land_alt = current_alt - 20
 			vehicle.mode = VehicleMode("LAND")
 
 	elif state_machine == 4: # Navigating to payload drop location
 		print "Entered State 4"
 		print "Landing drone"
-
-		#ult_dist = read_distance()
-		print "Distance to Ground (m): ", ult_dist, ", Distance to WP:", distance
-		if ult_dist > 0 and ult_dist < ult_dist_thresh and current_alt < land_alt:
+		if current_alt < land_alt:
 			print "Dropping Payload"
 			GPIO.output(latch_pin, GPIO.HIGH)
-			#time.sleep(.5)
-			#GPIO.output(latch_pin, GPIO.LOW)
 			print "Payload Dropped"
 			print "Switching to state 5"
 			vehicle.mode = VehicleMode("AUTO")
@@ -203,5 +149,5 @@ while True:
 
 	print "logging"
 
-	log.append([time_now, delta_time, current_lat, current_lng, current_alt, vehicle.mode.name, vehicle.armed, state_machine, distance, ult_dist])
+	log.append([time_now, delta_time, current_lat, current_lng, current_alt, vehicle.mode.name, vehicle.armed, state_machine, distance, 0])
 	writeArchive(log)
